@@ -20,16 +20,31 @@
 #include <pcl/point_types.h>
 #include <pcl/ros/conversions.h>
 
+#include "odometry_saver/MapSaver.h"
+
+
+extern pcl::PointCloud<pcl::PointXYZI>::Ptr map(new pcl::PointCloud<pcl::PointXYZI>());
+
+bool save_map(odometry_saver::MapSaver::Request& request, odometry_saver::MapSaver::Response& response) {
+  pcl::io::savePCDFileBinary(request.dst, *map);
+  ROS_INFO("Save map at %s", request.dst);
+  return true;
+}
+
 template<typename T>
 void save_data(const std::string& dst_directory, const T& data);
 
 template<>
 void save_data(const std::string& dst_directory, const sensor_msgs::PointCloud2ConstPtr& data) {
   std::stringstream dst_filename;
-  dst_filename << dst_directory << "/" << data->header.stamp.sec << "_" << boost::format("%09d") % data->header.stamp.nsec << ".pcd";
+  dst_filename << dst_directory << "/" << data->header.stamp.sec << "_" << boost::format("%06d") % (data->header.stamp.nsec/1000) << ".pcd";
 
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>());
   pcl::fromROSMsg(*data, *cloud);
+
+  *map += *cloud;
+
+  std::cout << map->points.size() << std::endl;
 
   pcl::io::savePCDFileBinary(dst_filename.str(), *cloud);
 }
@@ -37,7 +52,7 @@ void save_data(const std::string& dst_directory, const sensor_msgs::PointCloud2C
 template<>
 void save_data(const std::string& dst_directory, const nav_msgs::OdometryConstPtr& data) {
   std::stringstream dst_filename;
-  dst_filename << dst_directory << "/" << data->header.stamp.sec << "_" << boost::format("%09d") % data->header.stamp.nsec << ".odom";
+  dst_filename << dst_directory << "/" << data->header.stamp.sec << "_" << boost::format("%06d") % (data->header.stamp.nsec/1000) << ".odom";
 
   const auto& pose = data->pose.pose;
 
@@ -140,29 +155,9 @@ private:
 
   void odometry_callback(const nav_msgs::OdometryConstPtr& odometry_msg) {
     saved_odometry++;
-    Eigen::Matrix4d origin2odom = lookup_eigen(odometry_msg->header.frame_id, origin_frame);
-    Eigen::Matrix4d odom2base = lookup_eigen(endpoint_frame, odometry_msg->child_frame_id);
-
-    const auto& pose = odometry_msg->pose.pose;
-    Eigen::Matrix4d odombase2odom = Eigen::Matrix4d::Identity();
-    odombase2odom.block<3, 1>(0, 3) = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
-    odombase2odom.block<3, 3>(0, 0) = Eigen::Quaterniond(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z).toRotationMatrix();
-
-    Eigen::Matrix4d result = odom2base * odombase2odom * origin2odom;
-    Eigen::Quaterniond quat(result.block<3, 3>(0, 0));
 
     nav_msgs::OdometryPtr transformed(new nav_msgs::Odometry);
     *transformed = *odometry_msg;
-
-    auto& dst_pose = transformed->pose.pose;
-    dst_pose.position.x = result(0, 3);
-    dst_pose.position.y = result(1, 3);
-    dst_pose.position.z = result(2, 3);
-
-    dst_pose.orientation.w = quat.w();
-    dst_pose.orientation.x = quat.x();
-    dst_pose.orientation.y = quat.y();
-    dst_pose.orientation.z = quat.z();
 
     odometry_save_queue.push(transformed);
   }
@@ -202,7 +197,12 @@ private:
 };
 
 int main(int argc, char** argv) {
+
   ros::init(argc, argv, "odometry_saver");
+
+  ros::NodeHandle n;
+
+  ros::ServiceServer service = n.advertiseService("map_saver", save_map);
 
   OdometrySaverNode node;
 

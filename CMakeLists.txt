@@ -8,11 +8,20 @@ set(CMAKE_BUILD_TYPE "Release")
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  rospy
+  std_msgs
   pcl_ros
   nav_msgs
   sensor_msgs
-  ndt_omp
+  message_generation
 )
+
+add_service_files(
+  FILES
+  MapSaver.srv
+)
+
+generate_messages(DEPENDENCIES std_msgs)
 
 find_package(PCL 1.7 REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
