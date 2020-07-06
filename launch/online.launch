@@ -1,7 +1,7 @@
 <launch>
     <arg name="dst_directory" default="/tmp/odometry"/>
     <arg name="points_topic" default="/velodyne_cloud_2"/>
-    <arg name="odom_topic" default="/odom"/>
+    <arg name="odom_topic" default="/aft_mapped_to_init"/>
     <arg name="endpoint_frame" default="base_link"/>
     <arg name="origin_frame" default="odom"/>
 
