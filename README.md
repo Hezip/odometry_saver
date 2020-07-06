@@ -13,7 +13,7 @@ Add service to save map(Should not be too big)
 ## Getting Started
 
 ```
-roslaunch odometry_saver online.launch dst_directory:={folder}
+roslaunch odometry_saver online.launch dst_directory:={folder} points_topic:={your topic}
 rosbag play {your bag with points / poses}
 ```
 save map(Point cloud accumulation, without pose)
